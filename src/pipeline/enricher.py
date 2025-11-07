@@ -162,6 +162,9 @@ def _evaluate_relevance(profile: str, payload: LLMEnrichment, has_software: bool
     }:
         return False
 
+    if not has_software:
+        return False
+
     services_text = " ".join(payload.iso_services).lower()
-    return any(keyword in services_text for keyword in ("processing", "merchant", "gateway", "pos", "risk", "settlement", "acquiring"))
+    return any(keyword in services_text for keyword in ("processing", "merchant", "gateway", "pos", "risk", "settlement", "acquiring", "chargeback"))
 
