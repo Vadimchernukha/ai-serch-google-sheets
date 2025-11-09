@@ -92,13 +92,45 @@ class SheetClient:
         if "__row" in df.columns:
             df = df.drop(columns=["__row"])
 
+        drop_columns = {
+            "summary",
+            "insights",
+            "latest_news",
+            "articles",
+            "linkedin_posts",
+            "profile_refreshed_at",
+            "media_refreshed_at",
+            "dossier_refreshed_at",
+        }
+        hidden_prefixes = ("_",)
+
+        cols_to_drop = [col for col in drop_columns if col in df.columns]
+        if cols_to_drop:
+            df = df.drop(columns=cols_to_drop)
+        prefixed_cols = [col for col in df.columns if col.startswith(hidden_prefixes)]
+        if prefixed_cols:
+            df = df.drop(columns=prefixed_cols)
+
         column_order: List[str] = []
         if self._header:
             column_order.extend(self._header)
         column_order = [
             col
             for col in column_order
-            if col not in {"has_products", "product_names", "geography"}
+            if col
+            not in {
+                "has_products",
+                "product_names",
+                "geography",
+                "profile_refreshed_at",
+                "media_refreshed_at",
+                "dossier_refreshed_at",
+                "latest_news",
+                "articles",
+                "linkedin_posts",
+                "summary",
+                "insights",
+            }
         ]
         for col in df.columns.tolist():
             if col not in column_order:

@@ -18,25 +18,28 @@
    # отредактируй .env: GOOGLE_SERVICE_ACCOUNT_FILE, GSHEET_URL/ID, листы Software и ISO/MSP, API ключи (OPENAI, NEWSAPI, SERPAPI, APIFY)
    ```
 
-4. Первый запуск попросит выбрать профиль и режим:
-   - `1` — software: текущая логика (summary/insights/софт, extended = новости)
-   - `2` — iso_msp: компании-обработчики платежей, отдельные поля для категорий ISO/PSP
-   После профиля: выбор режима `basic` или `extended` (новости, статьи, LinkedIn)
+4. Теперь три отдельных этапа:
+   - Stage 1 — базовый сбор и анализ (`scrape`)
+   - Stage 2 — новости/LinkedIn/статьи (`media`)
+   - Stage 3 — «досье» через Perplexity (`dossier`)
 
-5. Примеры команд
-   - `1` — basic: только summary/insights/products
-   - `2` — extended: плюс новости, статьи, LinkedIn посты
-
-6. Полный прогон (с пропуском уже заполненных строк)
+5. Команды
    ```bash
-   python -m src.main --profile software --resume
-   python -m src.main --profile iso_msp --mode extended --resume
+   # Stage 1: baseline_summary, фильтры, софт-проверка
+   python -m src.cli scrape --profile software --resume
+
+   # Stage 2: новости/статьи/LinkedIn (хайлайты без сырых массивов)
+   python -m src.cli media --profile software --resume
+
+   # Stage 3: глубокое досье (дороже, по умолчанию обновляет все строки; добавь --resume чтобы перескочить заполненные)
+   python -m src.cli dossier --profile software --limit 10
    ```
 
 ### Полезные опции
 
-- `WORKER_COUNT` в `.env` — число параллельных потоков (по умолчанию 3).
+- `WORKER_COUNT` в `.env` — число параллельных потоков (Stage 1).
 - `ENABLE_PLAYWRIGHT=0` — отключить тяжёлый fallback на браузер.
 - `HTTP_TIMEOUT` — таймаут HTTP-запросов в секундах.
+- `PERPLEXITY_MODEL` — модель Perplexity (по умолчанию `sonar`).
 
 

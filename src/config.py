@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
     openai_model: str = Field("gpt-4o-mini", alias="OPENAI_MODEL")
     perplexity_api_key: Optional[str] = Field(default=None, alias="PERPLEXITY_API_KEY")
+    perplexity_model: str = Field("sonar", alias="PERPLEXITY_MODEL")
     serpapi_key: Optional[str] = Field(default=None, alias="SERPAPI_KEY")
     newsapi_key: Optional[str] = Field(default=None, alias="NEWSAPI_KEY")
     apify_api_token: Optional[str] = Field(default=None, alias="APIFY_API_TOKEN")
@@ -67,6 +68,7 @@ class Settings(BaseSettings):
             "NEWSAPI_KEY": self.newsapi_key or "",
             "SERPAPI_KEY": self.serpapi_key or "",
             "PERPLEXITY_API_KEY": self.perplexity_api_key or "",
+            "PERPLEXITY_MODEL": self.perplexity_model,
             "APIFY_API_TOKEN": self.apify_api_token or "",
         }
 

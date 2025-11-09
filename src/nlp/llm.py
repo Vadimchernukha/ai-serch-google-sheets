@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from time import sleep
 from typing import Any, Dict, List
 
 import httpx
@@ -32,6 +33,17 @@ class LLMEnrichment:
     merchant_segments: List[str] = field(default_factory=list)
     partnerships: List[str] = field(default_factory=list)
     raw_response: Dict[str, Any] | None = None
+
+
+@dataclass
+class DossierPayload:
+    summary: str
+    wins: List[str]
+    setbacks: List[str]
+    workforce_changes: List[str]
+    regulatory: List[str]
+    notable_quotes: List[str]
+    sources: List[str]
 
 
 def build_summary_and_insights(
@@ -80,28 +92,46 @@ def _call_openai(
     return _parse_llm_json(profile, content, raise_on_error=True)
 
 
-def _call_perplexity(
-    profile: str, company: CompanyRecord, context: Dict[str, Any], settings: Settings
-) -> LLMEnrichment:
-    prompt = _format_prompt(profile, company, context)
+def _invoke_perplexity(
+    messages: List[Dict[str, str]],
+    settings: Settings,
+    *,
+    temperature: float = 0.2,
+    search_mode: str | None = None,
+) -> Dict[str, Any]:
+    if not settings.perplexity_api_key:
+        raise ValueError("PERPLEXITY_API_KEY is not configured")
+
     headers = {
         "Authorization": f"Bearer {settings.perplexity_api_key}",
         "Content-Type": "application/json",
     }
-    payload = {
-        "model": "sonar-small-online",
-        "messages": [
+    payload: Dict[str, Any] = {
+        "model": settings.perplexity_model,
+        "messages": messages,
+        "temperature": temperature,
+    }
+    if search_mode:
+        payload["search_mode"] = search_mode
+
+    with httpx.Client(timeout=settings.http_timeout) as client:
+        response = client.post("https://api.perplexity.ai/chat/completions", headers=headers, json=payload)
+        response.raise_for_status()
+        return response.json()
+
+
+def _call_perplexity(
+    profile: str, company: CompanyRecord, context: Dict[str, Any], settings: Settings
+) -> LLMEnrichment:
+    prompt = _format_prompt(profile, company, context)
+    data = _invoke_perplexity(
+        [
             {"role": "system", "content": "You are a research assistant that produces JSON only."},
             {"role": "user", "content": prompt},
         ],
-        "temperature": 0.2,
-    }
-
-    with httpx.Client(timeout=settings.http_timeout) as client:
-        resp = client.post("https://api.perplexity.ai/chat/completions", headers=headers, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-
+        settings,
+        temperature=0.2,
+    )
     content = data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
     return _parse_llm_json(profile, content, raise_on_error=True)
 
@@ -177,6 +207,11 @@ def _heuristic_iso_payload(context: Dict[str, Any]) -> LLMEnrichment:
         if keyword in text:
             merchant_segments.append(keyword.capitalize())
 
+    partnerships: List[str] = []
+    for keyword in ("visa", "mastercard", "american express", "discover", "stripe", "adyen", "fis", "fiserv", "global payments"):
+        if keyword in text and keyword.title() not in partnerships:
+            partnerships.append(keyword.title())
+
     has_software = any(term in text for term in ("portal", "platform", "software", "saas", "dashboard"))
     software_products = []
 
@@ -207,6 +242,93 @@ def _build_context_payload(
         "news": [article.as_dict() for article in news],
         "linkedin_posts": [post.as_dict() for post in linkedin_posts],
     }
+
+
+def build_company_dossier(company: CompanyRecord, settings: Settings, *, horizon_months: int = 18) -> DossierPayload:
+    identifier = company.name or company.domain or "Unknown company"
+    user_prompt = (
+        f"Company: {identifier}\n"
+        f"Focus on material events within the last {horizon_months} months.\n"
+        "Return strict JSON with keys: summary (string), wins (array of strings), setbacks (array of strings), "
+        "workforce_changes (array of strings), regulatory (array of strings), notable_quotes (array of strings), "
+        "sources (array of URLs). For each array include concise bullet-level items. Include at least one source when possible."
+    )
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are an analyst generating risk/opportunity dossiers. Respond with valid JSON only. "
+                "Cite trustworthy sources and prefer verifiable facts."
+            ),
+        },
+        {"role": "user", "content": user_prompt},
+    ]
+
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            data = _invoke_perplexity(messages, settings, temperature=0.0, search_mode="web")
+            content = data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+            return _parse_dossier_json(content)
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            wait_time = 1.5 * (attempt + 1)
+            logger.warning(
+                "Perplexity dossier attempt {} failed for {} ({}). Retrying in {:.1f}s",
+                attempt + 1,
+                identifier,
+                exc,
+                wait_time,
+            )
+            sleep(wait_time)
+
+    raise RuntimeError(f"Perplexity dossier failed after retries for {identifier}") from last_error
+
+
+def _parse_dossier_json(content: str) -> DossierPayload:
+    stripped = content.strip()
+    if stripped.startswith("```"):
+        parts = stripped.splitlines()
+        if parts and parts[0].startswith("```"):
+            parts = parts[1:]
+        while parts and parts[-1].startswith("```"):
+            parts = parts[:-1]
+        stripped = "\n".join(parts).strip()
+        content = stripped or content
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        logger.debug("Dossier payload is not valid JSON: {}", content)
+        data = {}
+
+    def _as_list(key: str) -> List[str]:
+        value = data.get(key) or []
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        if isinstance(value, str) and value.strip():
+            return [value.strip()]
+        return []
+
+    summary = str(data.get("summary") or "No dossier insights found.").strip()
+    wins = _as_list("wins")
+    setbacks = _as_list("setbacks")
+    workforce = _as_list("workforce_changes")
+    regulatory = _as_list("regulatory")
+    notable_quotes = _as_list("notable_quotes")
+    sources = _as_list("sources")
+
+    if summary == "No dossier insights found." and not any([wins, setbacks, workforce, regulatory, notable_quotes, sources]):
+        logger.warning("Perplexity dossier returned empty payload: {}", content)
+
+    return DossierPayload(
+        summary=summary,
+        wins=wins,
+        setbacks=setbacks,
+        workforce_changes=workforce,
+        regulatory=regulatory,
+        notable_quotes=notable_quotes,
+        sources=sources,
+    )
 
 
 def _format_prompt(profile: str, company: CompanyRecord, context: Dict[str, Any]) -> str:
