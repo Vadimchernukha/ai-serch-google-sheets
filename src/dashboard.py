@@ -21,22 +21,36 @@ from src.google_sheet import SheetClient
 
 def load_settings_from_streamlit() -> Settings:
     """Load settings from Streamlit secrets or environment variables."""
+    import json
+    
     # Check if running on Streamlit Cloud
     if hasattr(st, "secrets") and st.secrets:
         secrets = st.secrets
         # Set environment variables from Streamlit secrets
         for key, value in secrets.items():
-            if isinstance(value, dict):
-                # Handle nested secrets (like GOOGLE_SERVICE_ACCOUNT_JSON as dict)
-                if key == "GOOGLE_SERVICE_ACCOUNT_JSON" and isinstance(value, dict):
-                    import json
+            if key == "GOOGLE_SERVICE_ACCOUNT_JSON":
+                # Handle JSON specially - it might be a dict or a string
+                if isinstance(value, dict):
+                    # If it's already a dict, serialize it to JSON string
                     os.environ[key] = json.dumps(value)
+                elif isinstance(value, str):
+                    # If it's a string, validate it's valid JSON and use as-is
+                    try:
+                        # Validate JSON by parsing it
+                        json.loads(value)
+                        os.environ[key] = value
+                    except (json.JSONDecodeError, TypeError):
+                        # If invalid, try to escape and use as-is
+                        os.environ[key] = value
                 else:
-                    # Flatten nested dicts
-                    for nested_key, nested_value in value.items():
-                        env_key = f"{key}_{nested_key}".upper()
-                        os.environ[env_key] = str(nested_value)
+                    os.environ[key] = str(value)
+            elif isinstance(value, dict):
+                # Flatten nested dicts (for other nested secrets)
+                for nested_key, nested_value in value.items():
+                    env_key = f"{key}_{nested_key}".upper()
+                    os.environ[env_key] = str(nested_value)
             else:
+                # Simple string values
                 os.environ[key] = str(value)
     
     return Settings()
