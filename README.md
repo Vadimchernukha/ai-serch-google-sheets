@@ -52,13 +52,14 @@ streamlit run src/dashboard.py
 3. Укажи:
    - **Main file path:** `src/dashboard.py`
    - **Python version:** 3.11 (или выше)
-4. Добавь секреты (Secrets) в Streamlit Cloud:
+4. Добавь секреты (Secrets) в Streamlit Cloud (Manage app → Secrets):
+   ```toml
+   GOOGLE_SERVICE_ACCOUNT_JSON = '{"type": "service_account", "project_id": "...", "private_key_id": "...", "private_key": "...", "client_email": "...", "client_id": "...", "auth_uri": "...", "token_uri": "...", "auth_provider_x509_cert_url": "...", "client_x509_cert_url": "..."}'
+   GSHEET_ID = "твой_id_таблицы"
+   GSHEET_WORKSHEET_SOFTWARE = "Software"
+   GSHEET_WORKSHEET_ISO_MSP = "ISO/MSP"
    ```
-   GOOGLE_SERVICE_ACCOUNT_JSON=<твой JSON>
-   GSHEET_ID=<ID таблицы>
-   GSHEET_WORKSHEET_SOFTWARE=Software
-   GSHEET_WORKSHEET_ISO_MSP=ISO/MSP
-   ```
+   **Важно:** `GOOGLE_SERVICE_ACCOUNT_JSON` должен быть строкой JSON в одинарных кавычках (весь JSON в одной строке).
 5. Нажми Deploy
 
 Дашборд будет доступен по публичному URL.
