@@ -26,32 +26,39 @@ def load_settings_from_streamlit() -> Settings:
     # Check if running on Streamlit Cloud
     if hasattr(st, "secrets") and st.secrets:
         secrets = st.secrets
-        # Set environment variables from Streamlit secrets
+        
+        # First, handle all top-level string values (GSHEET_ID, etc.)
         for key, value in secrets.items():
             if key == "GOOGLE_SERVICE_ACCOUNT_JSON":
-                # Handle JSON specially - it might be a dict or a string
-                if isinstance(value, dict):
-                    # If it's already a dict, serialize it to JSON string
-                    os.environ[key] = json.dumps(value)
-                elif isinstance(value, str):
-                    # If it's a string, validate it's valid JSON and use as-is
-                    try:
-                        # Validate JSON by parsing it
-                        json.loads(value)
-                        os.environ[key] = value
-                    except (json.JSONDecodeError, TypeError):
-                        # If invalid, try to escape and use as-is
-                        os.environ[key] = value
-                else:
-                    os.environ[key] = str(value)
+                # Skip this, handle separately below
+                continue
             elif isinstance(value, dict):
-                # Flatten nested dicts (for other nested secrets)
-                for nested_key, nested_value in value.items():
-                    env_key = f"{key}_{nested_key}".upper()
-                    os.environ[env_key] = str(nested_value)
+                # Handle nested dicts (like GOOGLE_SERVICE_ACCOUNT_JSON)
+                if key == "GOOGLE_SERVICE_ACCOUNT_JSON":
+                    # Serialize nested dict to JSON string
+                    os.environ[key] = json.dumps(value)
+                else:
+                    # Flatten other nested dicts
+                    for nested_key, nested_value in value.items():
+                        env_key = f"{key}_{nested_key}".upper()
+                        os.environ[env_key] = str(nested_value)
             else:
-                # Simple string values
-                os.environ[key] = str(value)
+                # Simple string values - set directly
+                os.environ[key.upper()] = str(value)
+        
+        # Handle GOOGLE_SERVICE_ACCOUNT_JSON separately
+        if "GOOGLE_SERVICE_ACCOUNT_JSON" in secrets:
+            value = secrets["GOOGLE_SERVICE_ACCOUNT_JSON"]
+            if isinstance(value, dict):
+                # If it's already a dict, serialize it to JSON string
+                os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"] = json.dumps(value)
+            elif isinstance(value, str):
+                # If it's a string, validate it's valid JSON and use as-is
+                try:
+                    json.loads(value)
+                    os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"] = value
+                except (json.JSONDecodeError, TypeError):
+                    os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"] = value
     
     return Settings()
 
