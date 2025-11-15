@@ -279,10 +279,23 @@ def main() -> None:
         return
     
     # Filter options
-    relevance_filter = st.sidebar.selectbox(
+    st.sidebar.subheader("🔍 Filters")
+    
+    # Relevance filter with quick buttons
+    st.sidebar.markdown("**Filter by Relevance:**")
+    relevance_options = {
+        "All": "All",
+        "✅ Relevant": "Relevant",
+        "❌ Not Relevant": "Not Relevant",
+        "⏳ Pending": "Pending",
+    }
+    relevance_filter = st.sidebar.radio(
         "Relevance",
-        ["All", "Relevant", "Not Relevant", "Pending"],
+        options=list(relevance_options.keys()),
+        format_func=lambda x: x,
+        index=0,
     )
+    relevance_filter_value = relevance_options[relevance_filter]
     
     has_software_filter = st.sidebar.selectbox(
         "Has Software",
@@ -291,11 +304,11 @@ def main() -> None:
     
     # Apply filters
     filtered_companies = companies
-    if relevance_filter == "Relevant":
+    if relevance_filter_value == "Relevant":
         filtered_companies = [c for c in filtered_companies if c.get("is_relevant") == "True" or c.get("is_relevant") is True]
-    elif relevance_filter == "Not Relevant":
+    elif relevance_filter_value == "Not Relevant":
         filtered_companies = [c for c in filtered_companies if c.get("is_relevant") == "False" or c.get("is_relevant") is False]
-    elif relevance_filter == "Pending":
+    elif relevance_filter_value == "Pending":
         filtered_companies = [c for c in filtered_companies if c.get("is_relevant") not in ("True", "False", True, False) or c.get("is_relevant") == ""]
     
     if has_software_filter == "Yes":
@@ -303,7 +316,13 @@ def main() -> None:
     elif has_software_filter == "No":
         filtered_companies = [c for c in filtered_companies if c.get("has_software") == "False" or c.get("has_software") is False]
     
+    # Statistics
+    st.sidebar.divider()
     st.sidebar.metric("Total Companies", len(filtered_companies))
+    relevant_count = sum(1 for c in companies if c.get("is_relevant") == "True" or c.get("is_relevant") is True)
+    st.sidebar.metric("✅ Relevant", relevant_count)
+    not_relevant_count = sum(1 for c in companies if c.get("is_relevant") == "False" or c.get("is_relevant") is False)
+    st.sidebar.metric("❌ Not Relevant", not_relevant_count)
     
     # Company list
     if not filtered_companies:
@@ -320,11 +339,24 @@ def main() -> None:
             or search_lower in (c.get("website") or "").lower()
         ]
     
-    # Company selection
-    company_names = [
-        f"{c.get('company_name') or c.get('website') or 'Unknown'} ({c.get('website', 'N/A')})"
-        for c in filtered_companies
-    ]
+    # Company selection with relevance indicators
+    def format_company_name(company: Dict[str, Any]) -> str:
+        """Format company name with relevance indicator."""
+        name = company.get('company_name') or company.get('website') or 'Unknown'
+        website = company.get('website', 'N/A')
+        
+        # Add relevance indicator
+        is_relevant = company.get("is_relevant")
+        if is_relevant == "True" or is_relevant is True:
+            indicator = "✅"
+        elif is_relevant == "False" or is_relevant is False:
+            indicator = "❌"
+        else:
+            indicator = "⏳"
+        
+        return f"{indicator} {name} ({website})"
+    
+    company_names = [format_company_name(c) for c in filtered_companies]
     
     selected_index = st.selectbox(
         "Select a company",
