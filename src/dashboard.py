@@ -30,16 +30,39 @@ def load_settings_from_streamlit() -> Settings:
         # Просто переносим все секреты в переменные окружения
         # Settings автоматически загрузит их из os.environ
         for key, value in secrets.items():
+            key_upper = key.upper()
+            
             if isinstance(value, str):
                 # Простые строковые значения - копируем как есть
-                os.environ[key.upper()] = value
+                # Для GOOGLE_SERVICE_ACCOUNT_JSON проверяем валидность JSON
+                if key_upper == "GOOGLE_SERVICE_ACCOUNT_JSON":
+                    try:
+                        # Валидируем JSON перед установкой
+                        parsed = json.loads(value)
+                        # Убеждаемся что это действительно service account JSON
+                        if not isinstance(parsed, dict) or "type" not in parsed:
+                            st.warning(f"⚠️ GOOGLE_SERVICE_ACCOUNT_JSON не содержит валидный service account JSON")
+                        os.environ[key_upper] = value
+                    except json.JSONDecodeError as exc:
+                        st.error(f"⚠️ **Ошибка в GOOGLE_SERVICE_ACCOUNT_JSON:** Невалидный JSON")
+                        st.error(f"Детали: {exc}")
+                        st.info("""
+                        **Проверь:**
+                        1. JSON должен быть в одну строку
+                        2. Все кавычки должны быть экранированы правильно
+                        3. Переносы строк в private_key должны быть как \\n (не реальные переносы)
+                        """)
+                        # Все равно устанавливаем, но с предупреждением
+                        os.environ[key_upper] = value
+                else:
+                    os.environ[key_upper] = value
             elif isinstance(value, dict):
                 # Если это словарь (например, вложенная структура), сериализуем в JSON
                 # Но обычно в Streamlit secrets все строки
-                os.environ[key.upper()] = json.dumps(value)
+                os.environ[key_upper] = json.dumps(value)
             else:
                 # Остальные типы - преобразуем в строку
-                os.environ[key.upper()] = str(value)
+                os.environ[key_upper] = str(value)
         
         # Проверка что необходимые ключи установлены
         received_keys = [k.upper() for k in secrets.keys()]
