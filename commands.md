@@ -35,6 +35,11 @@
    python -m src.cli dossier --profile software --limit 10
    ```
 
+6. Запуск дашборда (Streamlit)
+   ```bash
+   streamlit run src/dashboard.py
+   ```
+
 ### Полезные опции
 
 - `WORKER_COUNT` в `.env` — число параллельных потоков (Stage 1).
