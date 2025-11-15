@@ -27,6 +27,10 @@ def load_settings_from_streamlit() -> Settings:
     if hasattr(st, "secrets") and st.secrets:
         secrets = st.secrets
         
+        # Отладка: показываем что получили
+        received_keys = list(secrets.keys())
+        st.info(f"🔍 Получены ключи из секретов: {', '.join(received_keys)}")
+        
         # Обрабатываем секреты
         for key, value in secrets.items():
             key_upper = key.upper()
@@ -35,7 +39,9 @@ def load_settings_from_streamlit() -> Settings:
                 # Специальная обработка для GOOGLE_SERVICE_ACCOUNT_JSON
                 if isinstance(value, dict):
                     # Если это словарь (из TOML секции), сериализуем в JSON
-                    os.environ[key_upper] = json.dumps(value)
+                    json_str = json.dumps(value)
+                    os.environ[key_upper] = json_str
+                    st.success(f"✅ Установлен {key_upper} (dict -> JSON, длина: {len(json_str)})")
                 elif isinstance(value, str):
                     # Если это строка, проверяем валидность
                     try:
@@ -43,23 +49,38 @@ def load_settings_from_streamlit() -> Settings:
                         if not isinstance(parsed, dict) or "type" not in parsed:
                             st.warning(f"⚠️ GOOGLE_SERVICE_ACCOUNT_JSON не содержит валидный service account JSON")
                         os.environ[key_upper] = value
+                        st.success(f"✅ Установлен {key_upper} (string)")
                     except json.JSONDecodeError as exc:
                         st.error(f"⚠️ **Ошибка в GOOGLE_SERVICE_ACCOUNT_JSON:** Невалидный JSON: {exc}")
                         os.environ[key_upper] = value
             elif isinstance(value, dict):
                 # Другие словари - просто сериализуем
                 os.environ[key_upper] = json.dumps(value)
+                st.info(f"📦 {key_upper} = dict (сериализован)")
             elif isinstance(value, str):
                 # Простые строки
                 os.environ[key_upper] = value
+                st.success(f"✅ Установлен {key_upper} = {value[:50]}...")
             else:
                 # Остальные типы
                 os.environ[key_upper] = str(value)
+                st.info(f"📦 {key_upper} = {type(value).__name__}")
+        
+        # Явно проверяем GSHEET_URL
+        if "GSHEET_URL" in secrets:
+            st.success(f"✅ GSHEET_URL найден в секретах: {secrets['GSHEET_URL']}")
+        else:
+            st.error("❌ GSHEET_URL НЕ найден в секретах!")
+        
+        # Проверяем что установлено в os.environ
+        if "GSHEET_URL" in os.environ:
+            st.success(f"✅ GSHEET_URL установлен в os.environ: {os.environ['GSHEET_URL']}")
+        else:
+            st.error("❌ GSHEET_URL НЕ установлен в os.environ!")
         
         # Проверка что необходимые ключи установлены
-        received_keys = [k.upper() for k in secrets.keys()]
         required_keys = ["GSHEET_ID", "GSHEET_URL"]
-        has_required = any(key in received_keys for key in required_keys)
+        has_required = any(key in os.environ for key in required_keys)
         
         if not has_required:
             st.error("⚠️ **GSHEET_ID или GSHEET_URL не найден в секретах!**")
