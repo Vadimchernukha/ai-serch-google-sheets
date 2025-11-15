@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -18,10 +19,33 @@ from src.config import Settings
 from src.google_sheet import SheetClient
 
 
+def load_settings_from_streamlit() -> Settings:
+    """Load settings from Streamlit secrets or environment variables."""
+    # Check if running on Streamlit Cloud
+    if hasattr(st, "secrets") and st.secrets:
+        secrets = st.secrets
+        # Set environment variables from Streamlit secrets
+        for key, value in secrets.items():
+            if isinstance(value, dict):
+                # Handle nested secrets (like GOOGLE_SERVICE_ACCOUNT_JSON as dict)
+                if key == "GOOGLE_SERVICE_ACCOUNT_JSON" and isinstance(value, dict):
+                    import json
+                    os.environ[key] = json.dumps(value)
+                else:
+                    # Flatten nested dicts
+                    for nested_key, nested_value in value.items():
+                        env_key = f"{key}_{nested_key}".upper()
+                        os.environ[env_key] = str(nested_value)
+            else:
+                os.environ[key] = str(value)
+    
+    return Settings()
+
+
 def load_companies(profile: str) -> List[Dict[str, Any]]:
     """Load companies from Google Sheet for the given profile."""
     try:
-        settings = Settings()
+        settings = load_settings_from_streamlit()
         sheet = SheetClient(settings, worksheet_name=settings.worksheet_for_profile(profile))
         rows = sheet.fetch_rows()
         return rows
