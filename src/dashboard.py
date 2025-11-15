@@ -66,18 +66,18 @@ def load_settings_from_streamlit() -> Settings:
         # Debug: show what keys we received
         received_keys = list(secrets.keys())
         
-        # Check if GSHEET_ID was set
-        if "GSHEET_ID" not in os.environ:
-            st.error("⚠️ **GSHEET_ID не найден в секретах!**")
+        # Check if GSHEET_ID or GSHEET_URL was set
+        if "GSHEET_ID" not in os.environ and "GSHEET_URL" not in os.environ:
+            st.error("⚠️ **GSHEET_ID или GSHEET_URL не найден в секретах!**")
             st.warning(f"**Полученные ключи из секретов:** {', '.join(received_keys)}")
             
             with st.expander("📋 Инструкция по настройке секретов"):
                 st.markdown("""
-                **Проблема:** `GSHEET_ID` не найден в секретах Streamlit Cloud.
+                **Проблема:** `GSHEET_ID` или `GSHEET_URL` не найден в секретах Streamlit Cloud.
                 
                 **Решение:**
                 1. Перейди в Streamlit Cloud → **Manage app** → **Secrets**
-                2. Убедись что структура секретов выглядит так:
+                2. Добавь **один из вариантов** ниже:
                 """)
                 st.code("""
 [GOOGLE_SERVICE_ACCOUNT_JSON]
@@ -92,16 +92,21 @@ token_uri = "https://oauth2.googleapis.com/token"
 auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
 client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/..."
 
+# Вариант 1: только ID таблицы
 GSHEET_ID = "твой-id-таблицы"
+
+# Вариант 2: полная ссылка (можно использовать вместо GSHEET_ID)
+# GSHEET_URL = "https://docs.google.com/spreadsheets/d/твой-id-таблицы/edit"
+
 GSHEET_WORKSHEET_SOFTWARE = "Software"
 GSHEET_WORKSHEET_ISO_MSP = "ISO/MSP"
                 """, language="toml")
                 st.markdown("""
                 **Важно:**
-                - `GSHEET_ID` должен быть **ВНЕ** секции `[GOOGLE_SERVICE_ACCOUNT_JSON]`
-                - `GSHEET_ID` должен быть на **том же уровне**, что и `[GOOGLE_SERVICE_ACCOUNT_JSON]`
-                - Не используй отступы перед `GSHEET_ID`
-                - ID таблицы можно взять из URL: `docs.google.com/spreadsheets/d/ЭТО_ID/edit`
+                - Используй **либо** `GSHEET_ID` **либо** `GSHEET_URL` (не оба сразу)
+                - Если используешь `GSHEET_URL` - просто скопируй полную ссылку на таблицу
+                - Ключи должны быть **ВНЕ** секции `[GOOGLE_SERVICE_ACCOUNT_JSON]`
+                - Не используй отступы перед этими ключами
                 """)
             
             # Show what we actually received

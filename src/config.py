@@ -52,9 +52,9 @@ class Settings(BaseSettings):
             raw = self.google_service_account_json.strip()
             if raw.endswith("..."):
                 raise ValueError("GOOGLE_SERVICE_ACCOUNT_JSON placeholder detected; provide real credentials or set GOOGLE_SERVICE_ACCOUNT_FILE")
-            try:
+        try:
                 return json.loads(raw)
-            except json.JSONDecodeError as exc:
+        except json.JSONDecodeError as exc:
                 raise ValueError(f"Invalid Google service account JSON: {exc}") from exc
 
         raise ValueError("Google service account credentials are not configured")
