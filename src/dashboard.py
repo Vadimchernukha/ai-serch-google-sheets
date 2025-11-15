@@ -27,49 +27,28 @@ def load_settings_from_streamlit() -> Settings:
     if hasattr(st, "secrets") and st.secrets:
         secrets = st.secrets
         
-        # Debug: log what we're receiving (only in debug mode)
-        debug_info = []
-        
-        # Process all secrets
+        # Просто переносим все секреты в переменные окружения
+        # Settings автоматически загрузит их из os.environ
         for key, value in secrets.items():
-            key_upper = key.upper()
-            
-            if key_upper == "GOOGLE_SERVICE_ACCOUNT_JSON":
-                # Handle JSON specially - it might be a dict or a string
-                if isinstance(value, dict):
-                    # If it's already a dict, serialize it to JSON string
-                    os.environ[key_upper] = json.dumps(value)
-                    debug_info.append(f"Set {key_upper} from dict")
-                elif isinstance(value, str):
-                    # If it's a string, validate it's valid JSON and use as-is
-                    try:
-                        json.loads(value)
-                        os.environ[key_upper] = value
-                        debug_info.append(f"Set {key_upper} from string")
-                    except (json.JSONDecodeError, TypeError):
-                        os.environ[key_upper] = value
-                        debug_info.append(f"Set {key_upper} from string (invalid JSON)")
-                else:
-                    os.environ[key_upper] = str(value)
-                    debug_info.append(f"Set {key_upper} from other type")
+            if isinstance(value, str):
+                # Простые строковые значения - копируем как есть
+                os.environ[key.upper()] = value
             elif isinstance(value, dict):
-                # Flatten nested dicts (for other nested secrets)
-                for nested_key, nested_value in value.items():
-                    env_key = f"{key_upper}_{nested_key.upper()}"
-                    os.environ[env_key] = str(nested_value)
-                    debug_info.append(f"Set {env_key} from nested dict")
+                # Если это словарь (например, вложенная структура), сериализуем в JSON
+                # Но обычно в Streamlit secrets все строки
+                os.environ[key.upper()] = json.dumps(value)
             else:
-                # Simple string values - set directly
-                os.environ[key_upper] = str(value)
-                debug_info.append(f"Set {key_upper} = {str(value)[:50]}...")
+                # Остальные типы - преобразуем в строку
+                os.environ[key.upper()] = str(value)
         
-        # Debug: show what keys we received
-        received_keys = list(secrets.keys())
+        # Проверка что необходимые ключи установлены
+        received_keys = [k.upper() for k in secrets.keys()]
+        required_keys = ["GSHEET_ID", "GSHEET_URL"]
+        has_required = any(key in received_keys for key in required_keys)
         
-        # Check if GSHEET_ID or GSHEET_URL was set
-        if "GSHEET_ID" not in os.environ and "GSHEET_URL" not in os.environ:
+        if not has_required:
             st.error("⚠️ **GSHEET_ID или GSHEET_URL не найден в секретах!**")
-            st.warning(f"**Полученные ключи из секретов:** {', '.join(received_keys)}")
+            st.warning(f"**Полученные ключи:** {', '.join(received_keys)}")
             
             with st.expander("📋 Инструкция по настройке секретов"):
                 st.markdown("""
@@ -77,42 +56,27 @@ def load_settings_from_streamlit() -> Settings:
                 
                 **Решение:**
                 1. Перейди в Streamlit Cloud → **Manage app** → **Secrets**
-                2. Добавь **один из вариантов** ниже:
+                2. Добавь секреты в формате:
                 """)
                 st.code("""
-[GOOGLE_SERVICE_ACCOUNT_JSON]
-type = "service_account"
-project_id = "твой-project-id"
-private_key_id = "твой-private-key-id"
-private_key = "-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n"
-client_email = "твой-email@project.iam.gserviceaccount.com"
-client_id = "твой-client-id"
-auth_uri = "https://accounts.google.com/o/oauth2/auth"
-token_uri = "https://oauth2.googleapis.com/token"
-auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
-client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/..."
+GOOGLE_SERVICE_ACCOUNT_JSON = '{"type":"service_account","project_id":"...","private_key":"...","client_email":"..."}'
 
-# Вариант 1: только ID таблицы
-GSHEET_ID = "твой-id-таблицы"
-
-# Вариант 2: полная ссылка (можно использовать вместо GSHEET_ID)
-# GSHEET_URL = "https://docs.google.com/spreadsheets/d/твой-id-таблицы/edit"
-
+GSHEET_URL = "https://docs.google.com/spreadsheets/d/твой-id/edit"
 GSHEET_WORKSHEET_SOFTWARE = "Software"
 GSHEET_WORKSHEET_ISO_MSP = "ISO/MSP"
                 """, language="toml")
                 st.markdown("""
                 **Важно:**
-                - Используй **либо** `GSHEET_ID` **либо** `GSHEET_URL` (не оба сразу)
-                - Если используешь `GSHEET_URL` - просто скопируй полную ссылку на таблицу
-                - Ключи должны быть **ВНЕ** секции `[GOOGLE_SERVICE_ACCOUNT_JSON]`
-                - Не используй отступы перед этими ключами
+                - `GOOGLE_SERVICE_ACCOUNT_JSON` должен быть **JSON строкой в одну строку** внутри одинарных кавычек
+                - `GSHEET_URL` - полная ссылка на таблицу (или используй `GSHEET_ID` с ID таблицы)
+                - Все ключи должны быть на верхнем уровне (не внутри секций)
                 """)
             
             # Show what we actually received
             with st.expander("🔍 Отладочная информация"):
                 st.json({k: str(type(v).__name__) for k, v in secrets.items()})
     
+    # Settings автоматически загрузит переменные из os.environ
     return Settings()
 
 
