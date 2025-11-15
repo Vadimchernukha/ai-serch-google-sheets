@@ -107,11 +107,64 @@ def load_companies(profile: str) -> List[Dict[str, Any]]:
     """Load companies from Google Sheet for the given profile."""
     try:
         settings = load_settings_from_streamlit()
+        
+        # Попробуем загрузить service account info для проверки
+        try:
+            sa_info = settings.service_account_info()
+            if "private_key" not in sa_info:
+                st.error("⚠️ **В JSON отсутствует поле 'private_key'**")
+            elif not sa_info.get("private_key", "").startswith("-----BEGIN PRIVATE KEY-----"):
+                st.warning("⚠️ **private_key не начинается с '-----BEGIN PRIVATE KEY-----'**")
+                st.info("Возможно, переносы строк неправильно экранированы в TOML")
+        except Exception as sa_exc:
+            error_msg = str(sa_exc)
+            if "Invalid JWT Signature" in error_msg or "invalid_grant" in error_msg:
+                st.error("⚠️ **Ошибка аутентификации: Invalid JWT Signature**")
+                st.markdown("""
+                **Возможные причины:**
+                1. **Переносы строк в private_key** - в TOML они должны быть как `\\n` (два символа: обратный слэш и n)
+                2. **JSON поврежден** - проверь что весь JSON в одну строку
+                3. **Кавычки** - используй одинарные кавычки для всей JSON строки
+                
+                **Правильный формат в TOML:**
+                ```toml
+                GOOGLE_SERVICE_ACCOUNT_JSON = '{"private_key":"-----BEGIN PRIVATE KEY-----\\nMIIEvQIBADANBgkqhkiG...\\n-----END PRIVATE KEY-----\\n",...}'
+                ```
+                
+                **Важно:** `\\n` в TOML означает один символ новой строки в JSON, не реальный перенос строки!
+                """)
+            else:
+                st.error(f"⚠️ **Ошибка при загрузке credentials:** {error_msg}")
+        
         sheet = SheetClient(settings, worksheet_name=settings.worksheet_for_profile(profile))
         rows = sheet.fetch_rows()
         return rows
     except Exception as exc:
-        st.error(f"Failed to load data: {exc}")
+        error_msg = str(exc)
+        st.error(f"Failed to load data: {error_msg}")
+        
+        # Дополнительная диагностика для JWT ошибок
+        if "Invalid JWT Signature" in error_msg or "invalid_grant" in error_msg:
+            with st.expander("🔧 Как исправить ошибку JWT Signature"):
+                st.markdown("""
+                **Проблема:** Google не может проверить подпись JWT токена.
+                
+                **Решение:**
+                1. Открой свой Google Service Account JSON файл
+                2. Скопируй **весь файл целиком** (Ctrl+A, Ctrl+C)
+                3. В Streamlit Cloud Secrets вставь его в одну строку:
+                
+                ```toml
+                GOOGLE_SERVICE_ACCOUNT_JSON = '{"type":"service_account","project_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n",...}'
+                ```
+                
+                **Критически важно:**
+                - JSON должен быть в **одну строку** (без реальных переносов)
+                - Переносы строк в `private_key` должны быть как `\\n` (два символа)
+                - Используй **одинарные кавычки** вокруг всей JSON строки
+                - Не добавляй пробелы или переносы внутри JSON
+                """)
+        
         logger.exception("Failed to load companies")
         return []
 
