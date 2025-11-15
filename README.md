@@ -53,13 +53,30 @@ streamlit run src/dashboard.py
    - **Main file path:** `src/dashboard.py`
    - **Python version:** 3.11 (или выше)
 4. Добавь секреты (Secrets) в Streamlit Cloud (Manage app → Secrets):
+   
+   **Вариант 1 (рекомендуется):** Используй вложенную структуру для JSON:
    ```toml
-   GOOGLE_SERVICE_ACCOUNT_JSON = '{"type": "service_account", "project_id": "...", "private_key_id": "...", "private_key": "...", "client_email": "...", "client_id": "...", "auth_uri": "...", "token_uri": "...", "auth_provider_x509_cert_url": "...", "client_x509_cert_url": "..."}'
+   [GOOGLE_SERVICE_ACCOUNT_JSON]
+   type = "service_account"
+   project_id = "твой_project_id"
+   private_key_id = "твой_private_key_id"
+   private_key = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+   client_email = "твой_client_email"
+   client_id = "твой_client_id"
+   auth_uri = "https://accounts.google.com/o/oauth2/auth"
+   token_uri = "https://oauth2.googleapis.com/token"
+   auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+   client_x509_cert_url = "твой_cert_url"
+   
    GSHEET_ID = "твой_id_таблицы"
    GSHEET_WORKSHEET_SOFTWARE = "Software"
    GSHEET_WORKSHEET_ISO_MSP = "ISO/MSP"
    ```
-   **Важно:** `GOOGLE_SERVICE_ACCOUNT_JSON` должен быть строкой JSON в одинарных кавычках (весь JSON в одной строке).
+   
+   **Вариант 2:** Если используешь строку JSON, убедись что она валидная и в одной строке:
+   ```toml
+   GOOGLE_SERVICE_ACCOUNT_JSON = '{"type":"service_account","project_id":"...","private_key_id":"...","private_key":"...","client_email":"...","client_id":"...","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_x509_cert_url":"..."}'
+   ```
 5. Нажми Deploy
 
 Дашборд будет доступен по публичному URL.
