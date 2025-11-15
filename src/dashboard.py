@@ -27,6 +27,9 @@ def load_settings_from_streamlit() -> Settings:
     if hasattr(st, "secrets") and st.secrets:
         secrets = st.secrets
         
+        # Debug: log what we're receiving (only in debug mode)
+        debug_info = []
+        
         # Process all secrets
         for key, value in secrets.items():
             key_upper = key.upper()
@@ -36,23 +39,74 @@ def load_settings_from_streamlit() -> Settings:
                 if isinstance(value, dict):
                     # If it's already a dict, serialize it to JSON string
                     os.environ[key_upper] = json.dumps(value)
+                    debug_info.append(f"Set {key_upper} from dict")
                 elif isinstance(value, str):
                     # If it's a string, validate it's valid JSON and use as-is
                     try:
                         json.loads(value)
                         os.environ[key_upper] = value
+                        debug_info.append(f"Set {key_upper} from string")
                     except (json.JSONDecodeError, TypeError):
                         os.environ[key_upper] = value
+                        debug_info.append(f"Set {key_upper} from string (invalid JSON)")
                 else:
                     os.environ[key_upper] = str(value)
+                    debug_info.append(f"Set {key_upper} from other type")
             elif isinstance(value, dict):
                 # Flatten nested dicts (for other nested secrets)
                 for nested_key, nested_value in value.items():
                     env_key = f"{key_upper}_{nested_key.upper()}"
                     os.environ[env_key] = str(nested_value)
+                    debug_info.append(f"Set {env_key} from nested dict")
             else:
                 # Simple string values - set directly
                 os.environ[key_upper] = str(value)
+                debug_info.append(f"Set {key_upper} = {str(value)[:50]}...")
+        
+        # Debug: show what keys we received
+        received_keys = list(secrets.keys())
+        
+        # Check if GSHEET_ID was set
+        if "GSHEET_ID" not in os.environ:
+            st.error("⚠️ **GSHEET_ID не найден в секретах!**")
+            st.warning(f"**Полученные ключи из секретов:** {', '.join(received_keys)}")
+            
+            with st.expander("📋 Инструкция по настройке секретов"):
+                st.markdown("""
+                **Проблема:** `GSHEET_ID` не найден в секретах Streamlit Cloud.
+                
+                **Решение:**
+                1. Перейди в Streamlit Cloud → **Manage app** → **Secrets**
+                2. Убедись что структура секретов выглядит так:
+                """)
+                st.code("""
+[GOOGLE_SERVICE_ACCOUNT_JSON]
+type = "service_account"
+project_id = "твой-project-id"
+private_key_id = "твой-private-key-id"
+private_key = "-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n"
+client_email = "твой-email@project.iam.gserviceaccount.com"
+client_id = "твой-client-id"
+auth_uri = "https://accounts.google.com/o/oauth2/auth"
+token_uri = "https://oauth2.googleapis.com/token"
+auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/..."
+
+GSHEET_ID = "твой-id-таблицы"
+GSHEET_WORKSHEET_SOFTWARE = "Software"
+GSHEET_WORKSHEET_ISO_MSP = "ISO/MSP"
+                """, language="toml")
+                st.markdown("""
+                **Важно:**
+                - `GSHEET_ID` должен быть **ВНЕ** секции `[GOOGLE_SERVICE_ACCOUNT_JSON]`
+                - `GSHEET_ID` должен быть на **том же уровне**, что и `[GOOGLE_SERVICE_ACCOUNT_JSON]`
+                - Не используй отступы перед `GSHEET_ID`
+                - ID таблицы можно взять из URL: `docs.google.com/spreadsheets/d/ЭТО_ID/edit`
+                """)
+            
+            # Show what we actually received
+            with st.expander("🔍 Отладочная информация"):
+                st.json({k: str(type(v).__name__) for k, v in secrets.items()})
     
     return Settings()
 
