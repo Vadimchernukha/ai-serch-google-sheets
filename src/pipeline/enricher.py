@@ -357,6 +357,11 @@ def _evaluate_relevance(profile: str, payload: LLMEnrichment, has_software: bool
     if not has_software:
         return False
 
+    # For Payment Processor and Payment Service Provider, category + software is sufficient
+    if payload.category in {"Payment Processor", "Payment Service Provider"}:
+        return True
+
+    # For ISO/MSP, Acquirer, Hybrid - require payment-related keywords in services
     services_text = " ".join(payload.iso_services).lower()
     return any(keyword in services_text for keyword in ("processing", "merchant", "gateway", "pos", "risk", "settlement", "acquiring", "chargeback"))
 

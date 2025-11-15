@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     perplexity_api_key: Optional[str] = Field(default=None, alias="PERPLEXITY_API_KEY")
     perplexity_model: str = Field("sonar", alias="PERPLEXITY_MODEL")
     serpapi_key: Optional[str] = Field(default=None, alias="SERPAPI_KEY")
+    valueserp_api_key: Optional[str] = Field(default=None, alias="VALUESERP_API_KEY")
     newsapi_key: Optional[str] = Field(default=None, alias="NEWSAPI_KEY")
     apify_api_token: Optional[str] = Field(default=None, alias="APIFY_API_TOKEN")
 

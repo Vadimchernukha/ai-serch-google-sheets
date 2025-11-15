@@ -54,50 +54,92 @@ class SerpResult:
 
 
 def fetch_serp_overview(company: CompanyRecord, settings: Settings) -> SerpResult:
-    if not settings.serpapi_key:
-        return SerpResult(overview="", articles=[])
+    # Prefer Value SERP if available, fallback to SerpAPI
+    use_valueserp = bool(settings.valueserp_api_key)
+    api_key = settings.valueserp_api_key if use_valueserp else settings.serpapi_key
 
-    params = {
-        "engine": "google",
-        "q": f"{company.name} company overview",
-        "hl": "en",
-        "gl": "us",
-        "api_key": settings.serpapi_key,
-        "num": 5,
-    }
+    if not api_key:
+        return SerpResult(overview="", articles=[])
 
     articles: List[ExternalArticle] = []
     overview = ""
 
     try:
         with httpx.Client(timeout=settings.http_timeout) as client:
-            response = client.get("https://serpapi.com/search", params=params)
-            response.raise_for_status()
-            payload = response.json()
-
-            overview = payload.get("knowledge_graph", {}).get("description") or ""
-            if not overview and payload.get("organic_results"):
-                overview = payload["organic_results"][0].get("snippet", "")
-
-            articles.extend(_parse_serp_articles(payload.get("news_results")))
-
-            if not articles:
-                news_params = {
-                    "engine": "google_news",
-                    "q": f"{company.name} OR {company.domain}" if company.domain else company.name,
-                    "api_key": settings.serpapi_key,
+            if use_valueserp:
+                # Value SERP /search endpoint
+                params = {
+                    "api_key": api_key,
+                    "q": f"{company.name} company overview",
+                    "location": "United States",
                     "gl": "us",
                     "hl": "en",
                     "num": 5,
                 }
-                news_resp = client.get("https://serpapi.com/search", params=news_params)
-                news_resp.raise_for_status()
-                news_payload = news_resp.json()
-                fallback_items = news_payload.get("articles") or news_payload.get("news_results")
-                articles.extend(_parse_serp_articles(fallback_items))
+                response = client.get("https://api.valueserp.com/search", params=params)
+                response.raise_for_status()
+                payload = response.json()
+
+                # Value SERP structure is similar to SerpAPI
+                overview = payload.get("knowledge_graph", {}).get("description") or ""
+                if not overview and payload.get("organic_results"):
+                    overview = payload["organic_results"][0].get("snippet", "")
+
+                articles.extend(_parse_serp_articles(payload.get("news_results")))
+
+                # Fallback to Value SERP /news endpoint if no news in main search
+                if not articles:
+                    news_params = {
+                        "api_key": api_key,
+                        "q": f"{company.name} OR {company.domain}" if company.domain else company.name,
+                        "location": "United States",
+                        "gl": "us",
+                        "hl": "en",
+                        "num": 5,
+                    }
+                    news_resp = client.get("https://api.valueserp.com/news", params=news_params)
+                    news_resp.raise_for_status()
+                    news_payload = news_resp.json()
+                    fallback_items = news_payload.get("articles") or news_payload.get("news_results")
+                    articles.extend(_parse_serp_articles(fallback_items))
+            else:
+                # Legacy SerpAPI
+                params = {
+                    "engine": "google",
+                    "q": f"{company.name} company overview",
+                    "hl": "en",
+                    "gl": "us",
+                    "api_key": api_key,
+                    "num": 5,
+                }
+                response = client.get("https://serpapi.com/search", params=params)
+                response.raise_for_status()
+                payload = response.json()
+
+                overview = payload.get("knowledge_graph", {}).get("description") or ""
+                if not overview and payload.get("organic_results"):
+                    overview = payload["organic_results"][0].get("snippet", "")
+
+                articles.extend(_parse_serp_articles(payload.get("news_results")))
+
+                if not articles:
+                    news_params = {
+                        "engine": "google_news",
+                        "q": f"{company.name} OR {company.domain}" if company.domain else company.name,
+                        "api_key": api_key,
+                        "gl": "us",
+                        "hl": "en",
+                        "num": 5,
+                    }
+                    news_resp = client.get("https://serpapi.com/search", params=news_params)
+                    news_resp.raise_for_status()
+                    news_payload = news_resp.json()
+                    fallback_items = news_payload.get("articles") or news_payload.get("news_results")
+                    articles.extend(_parse_serp_articles(fallback_items))
 
     except httpx.HTTPError as exc:  # noqa: BLE001
-        logger.warning("SerpAPI request failed: {}", exc)
+        provider = "Value SERP" if use_valueserp else "SerpAPI"
+        logger.warning("{} request failed: {}", provider, exc)
         return SerpResult(overview="", articles=[])
 
     return SerpResult(overview=overview, articles=articles[:5])
