@@ -37,6 +37,32 @@ python -m src.cli media --profile software --resume
 python -m src.cli dossier --profile software --limit 10
 ```
 
+## Streamlit Dashboard
+
+Визуализация данных через веб-интерфейс:
+
+```bash
+streamlit run src/dashboard.py
+```
+
+### Деплой на Streamlit Cloud
+
+1. Перейди на [share.streamlit.io](https://share.streamlit.io)
+2. Подключи GitHub репозиторий `Vadimchernukha/ai-serch-google-sheets`
+3. Укажи:
+   - **Main file path:** `src/dashboard.py`
+   - **Python version:** 3.11 (или выше)
+4. Добавь секреты (Secrets) в Streamlit Cloud:
+   ```
+   GOOGLE_SERVICE_ACCOUNT_JSON=<твой JSON>
+   GSHEET_ID=<ID таблицы>
+   GSHEET_WORKSHEET_SOFTWARE=Software
+   GSHEET_WORKSHEET_ISO_MSP=ISO/MSP
+   ```
+5. Нажми Deploy
+
+Дашборд будет доступен по публичному URL.
+
 ## Колонки результата
 
 **Общие**
@@ -47,8 +73,8 @@ python -m src.cli dossier --profile software --limit 10
 **ISO/MSP профиль**
 - `category`, `services`, `merchant_segments`, `partnerships`
 
-**Stage 2 (сигналы)**
+**Stage 2 (сигналы)**
 - `news_highlight`, `article_highlight`, `linkedin_highlight`, `signal_confidence`
 
-**Stage 3 (досье)**
+**Stage 3 (досье)**
 - `dossier_summary`, `dossier_wins`, `dossier_setbacks`, `dossier_regulatory`, `dossier_workforce`, `dossier_quotes`, `dossier_sources`, `dossier_error`
