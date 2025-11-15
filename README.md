@@ -47,39 +47,25 @@ streamlit run src/dashboard.py
 
 ### Деплой на Streamlit Cloud
 
-1. Перейди на [share.streamlit.io](https://share.streamlit.io)
-2. Подключи GitHub репозиторий `Vadimchernukha/ai-serch-google-sheets`
-3. Укажи:
+1. Перейди на [share.streamlit.io](https://share.streamlit.io) и войди через GitHub
+2. Нажми **"New app"**
+3. Выбери репозиторий: `Vadimchernukha/ai-serch-google-sheets`
+4. Укажи:
    - **Main file path:** `src/dashboard.py`
    - **Python version:** 3.11 (или выше)
-4. Добавь секреты (Secrets) в Streamlit Cloud (Manage app → Secrets):
-   
-   **Вариант 1 (рекомендуется):** Используй вложенную структуру для JSON:
-   ```toml
-   [GOOGLE_SERVICE_ACCOUNT_JSON]
-   type = "service_account"
-   project_id = "твой_project_id"
-   private_key_id = "твой_private_key_id"
-   private_key = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-   client_email = "твой_client_email"
-   client_id = "твой_client_id"
-   auth_uri = "https://accounts.google.com/o/oauth2/auth"
-   token_uri = "https://oauth2.googleapis.com/token"
-   auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
-   client_x509_cert_url = "твой_cert_url"
-   
-   GSHEET_ID = "твой_id_таблицы"
-   GSHEET_WORKSHEET_SOFTWARE = "Software"
-   GSHEET_WORKSHEET_ISO_MSP = "ISO/MSP"
-   ```
-   
-   **Вариант 2:** Если используешь строку JSON, убедись что она валидная и в одной строке:
-   ```toml
-   GOOGLE_SERVICE_ACCOUNT_JSON = '{"type":"service_account","project_id":"...","private_key_id":"...","private_key":"...","client_email":"...","client_id":"...","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_x509_cert_url":"..."}'
-   ```
-5. Нажми Deploy
+5. **Настрой секреты:**
+   - Открой файл `.streamlit/secrets.example.toml` в этом репозитории
+   - Скопируй весь его содержимое
+   - В Streamlit Cloud перейди в **Manage app** → **Secrets**
+   - Вставь скопированный текст
+   - Замени все значения на свои:
+     - Открой свой Google Service Account JSON файл
+     - Скопируй значения из JSON и вставь в соответствующие поля секретов
+     - `GSHEET_ID` — ID твоей Google таблицы (из URL: `docs.google.com/spreadsheets/d/ЭТО_ID/edit`)
+   - Сохрани секреты
+6. Нажми **Deploy** (или приложение перезапустится автоматически)
 
-Дашборд будет доступен по публичному URL.
+Дашборд будет доступен по публичному URL вида `https://your-app-name.streamlit.app`
 
 ## Колонки результата
 
