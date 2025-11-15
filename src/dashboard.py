@@ -27,41 +27,33 @@ def load_settings_from_streamlit() -> Settings:
     if hasattr(st, "secrets") and st.secrets:
         secrets = st.secrets
         
-        # Просто переносим все секреты в переменные окружения
-        # Settings автоматически загрузит их из os.environ
+        # Обрабатываем секреты
         for key, value in secrets.items():
             key_upper = key.upper()
             
-            if isinstance(value, str):
-                # Простые строковые значения - копируем как есть
-                # Для GOOGLE_SERVICE_ACCOUNT_JSON проверяем валидность JSON
-                if key_upper == "GOOGLE_SERVICE_ACCOUNT_JSON":
+            if key_upper == "GOOGLE_SERVICE_ACCOUNT_JSON":
+                # Специальная обработка для GOOGLE_SERVICE_ACCOUNT_JSON
+                if isinstance(value, dict):
+                    # Если это словарь (из TOML секции), сериализуем в JSON
+                    os.environ[key_upper] = json.dumps(value)
+                elif isinstance(value, str):
+                    # Если это строка, проверяем валидность
                     try:
-                        # Валидируем JSON перед установкой
                         parsed = json.loads(value)
-                        # Убеждаемся что это действительно service account JSON
                         if not isinstance(parsed, dict) or "type" not in parsed:
                             st.warning(f"⚠️ GOOGLE_SERVICE_ACCOUNT_JSON не содержит валидный service account JSON")
                         os.environ[key_upper] = value
                     except json.JSONDecodeError as exc:
-                        st.error(f"⚠️ **Ошибка в GOOGLE_SERVICE_ACCOUNT_JSON:** Невалидный JSON")
-                        st.error(f"Детали: {exc}")
-                        st.info("""
-                        **Проверь:**
-                        1. JSON должен быть в одну строку
-                        2. Все кавычки должны быть экранированы правильно
-                        3. Переносы строк в private_key должны быть как \\n (не реальные переносы)
-                        """)
-                        # Все равно устанавливаем, но с предупреждением
+                        st.error(f"⚠️ **Ошибка в GOOGLE_SERVICE_ACCOUNT_JSON:** Невалидный JSON: {exc}")
                         os.environ[key_upper] = value
-                else:
-                    os.environ[key_upper] = value
             elif isinstance(value, dict):
-                # Если это словарь (например, вложенная структура), сериализуем в JSON
-                # Но обычно в Streamlit secrets все строки
+                # Другие словари - просто сериализуем
                 os.environ[key_upper] = json.dumps(value)
+            elif isinstance(value, str):
+                # Простые строки
+                os.environ[key_upper] = value
             else:
-                # Остальные типы - преобразуем в строку
+                # Остальные типы
                 os.environ[key_upper] = str(value)
         
         # Проверка что необходимые ключи установлены
