@@ -2,182 +2,99 @@
 
 from __future__ import annotations
 
-import os
-import sys
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+import gspread
 import streamlit as st
+from google.oauth2.service_account import Credentials
 from loguru import logger
 
-# Add project root to path for imports
-project_root = Path(__file__).parent.parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
 
-from src.config import Settings
-from src.google_sheet import SheetClient
-
-
-def load_settings_from_streamlit() -> Settings:
-    """Load settings from Streamlit secrets or environment variables."""
-    import json
-    
-    # Check if running on Streamlit Cloud
-    if hasattr(st, "secrets") and st.secrets:
-        secrets = st.secrets
+@st.cache_resource
+def get_gspread_client():
+    """Create and cache gspread client from Streamlit secrets."""
+    try:
+        # Получаем credentials напрямую из secrets
+        google_creds_dict = dict(st.secrets["GOOGLE_SERVICE_ACCOUNT_JSON"])
         
-        # Отладка: показываем что получили
-        received_keys = list(secrets.keys())
-        st.info(f"🔍 Получены ключи из секретов: {', '.join(received_keys)}")
+        # Создаем credentials
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
+        credentials = Credentials.from_service_account_info(
+            google_creds_dict,
+            scopes=scopes
+        )
         
-        # Обрабатываем секреты
-        for key, value in secrets.items():
-            key_upper = key.upper()
-            
-            if key_upper == "GOOGLE_SERVICE_ACCOUNT_JSON":
-                # Специальная обработка для GOOGLE_SERVICE_ACCOUNT_JSON
-                if isinstance(value, dict):
-                    # Если это словарь (из TOML секции), сериализуем в JSON
-                    json_str = json.dumps(value)
-                    os.environ[key_upper] = json_str
-                    st.success(f"✅ Установлен {key_upper} (dict -> JSON, длина: {len(json_str)})")
-                elif isinstance(value, str):
-                    # Если это строка, проверяем валидность
-                    try:
-                        parsed = json.loads(value)
-                        if not isinstance(parsed, dict) or "type" not in parsed:
-                            st.warning(f"⚠️ GOOGLE_SERVICE_ACCOUNT_JSON не содержит валидный service account JSON")
-                        os.environ[key_upper] = value
-                        st.success(f"✅ Установлен {key_upper} (string)")
-                    except json.JSONDecodeError as exc:
-                        st.error(f"⚠️ **Ошибка в GOOGLE_SERVICE_ACCOUNT_JSON:** Невалидный JSON: {exc}")
-                        os.environ[key_upper] = value
-            elif isinstance(value, dict):
-                # Другие словари - просто сериализуем
-                os.environ[key_upper] = json.dumps(value)
-                st.info(f"📦 {key_upper} = dict (сериализован)")
-            elif isinstance(value, str):
-                # Простые строки
-                os.environ[key_upper] = value
-                st.success(f"✅ Установлен {key_upper} = {value[:50]}...")
-            else:
-                # Остальные типы
-                os.environ[key_upper] = str(value)
-                st.info(f"📦 {key_upper} = {type(value).__name__}")
-        
-        # Явно проверяем GSHEET_URL
-        if "GSHEET_URL" in secrets:
-            st.success(f"✅ GSHEET_URL найден в секретах: {secrets['GSHEET_URL']}")
-        else:
-            st.error("❌ GSHEET_URL НЕ найден в секретах!")
-        
-        # Проверяем что установлено в os.environ
-        if "GSHEET_URL" in os.environ:
-            st.success(f"✅ GSHEET_URL установлен в os.environ: {os.environ['GSHEET_URL']}")
-        else:
-            st.error("❌ GSHEET_URL НЕ установлен в os.environ!")
-        
-        # Проверка что необходимые ключи установлены
-        required_keys = ["GSHEET_ID", "GSHEET_URL"]
-        has_required = any(key in os.environ for key in required_keys)
-        
-        if not has_required:
-            st.error("⚠️ **GSHEET_ID или GSHEET_URL не найден в секретах!**")
-            st.warning(f"**Полученные ключи:** {', '.join(received_keys)}")
-            
-            with st.expander("📋 Инструкция по настройке секретов"):
-                st.markdown("""
-                **Проблема:** `GSHEET_ID` или `GSHEET_URL` не найден в секретах Streamlit Cloud.
-                
-                **Решение:**
-                1. Перейди в Streamlit Cloud → **Manage app** → **Secrets**
-                2. Добавь секреты в формате:
-                """)
-                st.code("""
-GOOGLE_SERVICE_ACCOUNT_JSON = '{"type":"service_account","project_id":"...","private_key":"...","client_email":"..."}'
-
-GSHEET_URL = "https://docs.google.com/spreadsheets/d/твой-id/edit"
-GSHEET_WORKSHEET_SOFTWARE = "Software"
-GSHEET_WORKSHEET_ISO_MSP = "ISO/MSP"
-                """, language="toml")
-                st.markdown("""
-                **Важно:**
-                - `GOOGLE_SERVICE_ACCOUNT_JSON` должен быть **JSON строкой в одну строку** внутри одинарных кавычек
-                - `GSHEET_URL` - полная ссылка на таблицу (или используй `GSHEET_ID` с ID таблицы)
-                - Все ключи должны быть на верхнем уровне (не внутри секций)
-                """)
-            
-            # Show what we actually received
-            with st.expander("🔍 Отладочная информация"):
-                st.json({k: str(type(v).__name__) for k, v in secrets.items()})
-    
-    # Settings автоматически загрузит переменные из os.environ
-    return Settings()
+        # Авторизуемся в gspread
+        client = gspread.authorize(credentials)
+        return client
+    except Exception as exc:
+        st.error(f"⚠️ **Ошибка при создании Google Sheets клиента:** {exc}")
+        logger.exception("Failed to create gspread client")
+        return None
 
 
 def load_companies(profile: str) -> List[Dict[str, Any]]:
     """Load companies from Google Sheet for the given profile."""
     try:
-        settings = load_settings_from_streamlit()
+        # Получаем gspread клиент
+        client = get_gspread_client()
+        if not client:
+            return []
         
-        # Попробуем загрузить service account info для проверки
+        # Открываем таблицу
+        sheet = client.open_by_url(st.secrets["GSHEET_URL"])
+        
+        # Определяем имя worksheet
+        worksheet_name = st.secrets.get(
+            f"GSHEET_WORKSHEET_{profile.upper()}" if profile == "iso_msp" else "GSHEET_WORKSHEET_SOFTWARE",
+            "Software" if profile == "software" else "ISO/MSP"
+        )
+        
+        # Получаем worksheet
         try:
-            sa_info = settings.service_account_info()
-            if "private_key" not in sa_info:
-                st.error("⚠️ **В JSON отсутствует поле 'private_key'**")
-            elif not sa_info.get("private_key", "").startswith("-----BEGIN PRIVATE KEY-----"):
-                st.warning("⚠️ **private_key не начинается с '-----BEGIN PRIVATE KEY-----'**")
-                st.info("Возможно, переносы строк неправильно экранированы в TOML")
-        except Exception as sa_exc:
-            error_msg = str(sa_exc)
-            if "Invalid JWT Signature" in error_msg or "invalid_grant" in error_msg:
-                st.error("⚠️ **Ошибка аутентификации: Invalid JWT Signature**")
-                st.markdown("""
-                **Возможные причины:**
-                1. **Переносы строк в private_key** - в TOML они должны быть как `\\n` (два символа: обратный слэш и n)
-                2. **JSON поврежден** - проверь что весь JSON в одну строку
-                3. **Кавычки** - используй одинарные кавычки для всей JSON строки
-                
-                **Правильный формат в TOML:**
-                ```toml
-                GOOGLE_SERVICE_ACCOUNT_JSON = '{"private_key":"-----BEGIN PRIVATE KEY-----\\nMIIEvQIBADANBgkqhkiG...\\n-----END PRIVATE KEY-----\\n",...}'
-                ```
-                
-                **Важно:** `\\n` в TOML означает один символ новой строки в JSON, не реальный перенос строки!
-                """)
-            else:
-                st.error(f"⚠️ **Ошибка при загрузке credentials:** {error_msg}")
+            worksheet = sheet.worksheet(worksheet_name)
+        except gspread.exceptions.WorksheetNotFound:
+            # Пробуем альтернативные имена
+            alt_names = ["Software", "ISO/MSP", "Sheet1"]
+            worksheet = None
+            for name in alt_names:
+                try:
+                    worksheet = sheet.worksheet(name)
+                    break
+                except gspread.exceptions.WorksheetNotFound:
+                    continue
+            
+            if not worksheet:
+                st.error(f"⚠️ Worksheet '{worksheet_name}' не найден в таблице")
+                return []
         
-        sheet = SheetClient(settings, worksheet_name=settings.worksheet_for_profile(profile))
-        rows = sheet.fetch_rows()
-        return rows
+        # Получаем все данные
+        all_values = worksheet.get_all_values()
+        if not all_values:
+            return []
+        
+        # Первая строка - заголовки
+        headers = all_values[0]
+        
+        # Преобразуем в список словарей
+        companies = []
+        for row_idx, row_values in enumerate(all_values[1:], start=2):
+            company = {}
+            for col_idx, header in enumerate(headers):
+                value = row_values[col_idx] if col_idx < len(row_values) else ""
+                company[header] = value
+            company["__row"] = row_idx
+            companies.append(company)
+        
+        logger.info(f"Loaded {len(companies)} companies from Google Sheet")
+        return companies
+        
     except Exception as exc:
         error_msg = str(exc)
         st.error(f"Failed to load data: {error_msg}")
-        
-        # Дополнительная диагностика для JWT ошибок
-        if "Invalid JWT Signature" in error_msg or "invalid_grant" in error_msg:
-            with st.expander("🔧 Как исправить ошибку JWT Signature"):
-                st.markdown("""
-                **Проблема:** Google не может проверить подпись JWT токена.
-                
-                **Решение:**
-                1. Открой свой Google Service Account JSON файл
-                2. Скопируй **весь файл целиком** (Ctrl+A, Ctrl+C)
-                3. В Streamlit Cloud Secrets вставь его в одну строку:
-                
-                ```toml
-                GOOGLE_SERVICE_ACCOUNT_JSON = '{"type":"service_account","project_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n",...}'
-                ```
-                
-                **Критически важно:**
-                - JSON должен быть в **одну строку** (без реальных переносов)
-                - Переносы строк в `private_key` должны быть как `\\n` (два символа)
-                - Используй **одинарные кавычки** вокруг всей JSON строки
-                - Не добавляй пробелы или переносы внутри JSON
-                """)
-        
         logger.exception("Failed to load companies")
         return []
 
