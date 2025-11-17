@@ -32,6 +32,11 @@ class LLMEnrichment:
     iso_services: List[str] = field(default_factory=list)
     merchant_segments: List[str] = field(default_factory=list)
     partnerships: List[str] = field(default_factory=list)
+    # Enterprise-specific fields
+    industry: str = "Unknown"
+    has_exclusion: bool = False
+    exclusion_reason: str = ""
+    tech_signals: List[str] = field(default_factory=list)
     raw_response: Dict[str, Any] | None = None
 
 
@@ -344,6 +349,25 @@ def _format_prompt(profile: str, company: CompanyRecord, context: Dict[str, Any]
             f"LinkedIn posts:\n{truncate_text(json.dumps(context.get('linkedin_posts', [])[:5], ensure_ascii=False), 1500)}"
         )
 
+    if profile == "enterprise":
+        return (
+            f"Company: {company.name}\n"
+            "Return strict JSON with keys: summary (string), insights (string), industry (string), "
+            "has_exclusion (bool - true if company is: IT service provider/outsourcing/custom software/IT consulting, e-commerce store/marketplace, video game developer, non-profit/religious organization, military/space organization), "
+            "exclusion_reason (string - reason if has_exclusion is true, empty otherwise), "
+            "tech_signals (array of strings - look for: digital transformation, automation, data analytics, logistics technology, developer/data scientist jobs, complex data-heavy industries like manufacturing/healthcare/supply chain/energy/transportation, client/partner/supplier portals, own tools/apps/platforms, innovation/R&D initiatives, technology infrastructure), "
+            "has_software (bool - true if company develops own software/tools/platforms, not just uses third-party software), "
+            "software_products (array of strings - list of proprietary software/tools/platforms if has_software is true), "
+            "business_model (enum one of [product, service, platform, marketplace, hybrid, other]), "
+            "market_focus (enum one of [B2B, B2C, B2B2C, B2G, Mixed, Other]).\n"
+            "Use provided material only.\n"
+            f"Website content:\n{truncate_text(context.get('site_text', ''), 4000)}\n\n"
+            f"Search overview:\n{truncate_text(context.get('serp_overview', ''), 1500)}\n\n"
+            f"Articles:\n{truncate_text(json.dumps(context.get('serp_articles', [])[:5], ensure_ascii=False), 1500)}\n\n"
+            f"News:\n{truncate_text(json.dumps(context.get('news', [])[:5], ensure_ascii=False), 1500)}\n\n"
+            f"LinkedIn posts:\n{truncate_text(json.dumps(context.get('linkedin_posts', [])[:5], ensure_ascii=False), 1500)}"
+        )
+
     return (
         f"Company: {company.name}\n"
         "Return strict JSON with keys: summary (string), insights (string), has_software (bool), software_products (array of strings containing only software/SaaS/platform offerings), business_model (enum one of [product, service, platform, marketplace, hybrid, other]), market_focus (enum one of [B2B, B2C, B2B2C, B2G, Mixed, Other]).\n"
@@ -399,6 +423,45 @@ def _parse_llm_json(profile: str, content: str, *, raise_on_error: bool = False)
             iso_services=[str(item) for item in services][:8],
             merchant_segments=[str(item) for item in merchant_segments][:8],
             partnerships=[str(item) for item in data.get("partnerships", [])][:8],
+            raw_response=data,
+        )
+
+    if profile == "enterprise":
+        industry = data.get("industry") or "Unknown"
+        has_exclusion = bool(data.get("has_exclusion"))
+        exclusion_reason = data.get("exclusion_reason") or ""
+        tech_signals = data.get("tech_signals") or []
+        if not isinstance(tech_signals, list):
+            tech_signals = [str(tech_signals)]
+        
+        software_products = data.get("software_products") or []
+        if not isinstance(software_products, list):
+            software_products = [str(software_products)]
+        software_products = filter_software_candidates(software_products)
+        has_software = bool(data.get("has_software") or software_products)
+        
+        business_model = data.get("business_model") or "other"
+        market_focus = data.get("market_focus") or "Other"
+        
+        allowed_models = {"product", "service", "platform", "marketplace", "hybrid", "other"}
+        bm_normalized = str(business_model).lower()
+        business_model = bm_normalized if bm_normalized in allowed_models else "other"
+        
+        allowed_markets = {"B2B", "B2C", "B2B2C", "B2G", "MIXED", "OTHER"}
+        mf_normalized = str(market_focus).upper()
+        market_focus = mf_normalized if mf_normalized in allowed_markets else "OTHER"
+        
+        return LLMEnrichment(
+            summary=summary,
+            insights=insights,
+            has_software=has_software,
+            software_products=[str(item) for item in software_products][:8],
+            business_model=business_model,
+            market_focus=market_focus,
+            industry=str(industry),
+            has_exclusion=has_exclusion,
+            exclusion_reason=str(exclusion_reason),
+            tech_signals=[str(item) for item in tech_signals][:10],
             raw_response=data,
         )
 

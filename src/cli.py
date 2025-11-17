@@ -54,7 +54,7 @@ def _select_rows(
 
 @app.command()
 def scrape(
-    profile: str = typer.Option("software", help="Target profile: software or iso_msp"),
+    profile: str = typer.Option("software", help="Target profile: software, iso_msp, or enterprise"),
     limit: Optional[int] = typer.Option(None, help="Max number of rows to process"),
     resume: bool = typer.Option(False, help="Skip rows that already have a summary"),
     backup: bool = typer.Option(False, help="Backup the sheet before updating"),

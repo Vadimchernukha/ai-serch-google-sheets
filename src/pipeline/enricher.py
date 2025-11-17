@@ -68,14 +68,26 @@ def collect_profile(row: Dict[str, Any], settings: Settings, profile: str, index
     result["business_model"] = llm_payload.business_model
     result["market_focus"] = llm_payload.market_focus
 
-    if profile != "software":
+    if profile == "iso_msp":
         result["category"] = llm_payload.category
         result["services"] = ", ".join(llm_payload.iso_services[:8])
         result["merchant_segments"] = ", ".join(llm_payload.merchant_segments[:8])
         result["partnerships"] = ", ".join(llm_payload.partnerships[:8])
-    else:
-        # ensure ISO-specific columns are cleared if switching profile
+        # Clear enterprise-specific columns
+        for field in ("industry", "exclusion_reason", "tech_signals"):
+            if field in result:
+                result[field] = ""
+    elif profile == "enterprise":
+        result["industry"] = llm_payload.industry
+        result["exclusion_reason"] = llm_payload.exclusion_reason
+        result["tech_signals"] = ", ".join(llm_payload.tech_signals[:10])
+        # Clear ISO-specific columns
         for field in ("category", "services", "merchant_segments", "partnerships"):
+            if field in result:
+                result[field] = ""
+    else:  # software profile
+        # Clear both ISO and enterprise-specific columns
+        for field in ("category", "services", "merchant_segments", "partnerships", "industry", "exclusion_reason", "tech_signals"):
             if field in result:
                 result[field] = ""
 
@@ -345,6 +357,18 @@ def _evaluate_relevance(profile: str, payload: LLMEnrichment, has_software: bool
             return False
         return True
 
+    if profile == "enterprise":
+        # Hard exclusions - immediate reject
+        if payload.has_exclusion:
+            return False
+        
+        # Must have at least 2 tech signals OR have proprietary software
+        if len(payload.tech_signals) >= 2 or has_software:
+            return True
+        
+        return False
+
+    # ISO/MSP profile logic
     if payload.category not in {
         "Payment Processor",
         "Payment Service Provider",

@@ -24,11 +24,21 @@ CLI для массового обогащения данных о компан�
 - `reports/` — локальные бэкапы JSON/CSV после запуска.
 - `commands.md` — шпаргалка с командами запуска.
 
+## Профили
+
+Доступные профили для анализа:
+
+- **software**: компании с софтверными продуктами (B2B/B2B2C/B2G фокус)
+- **iso_msp**: ISO/MSP, процессоры платежей, PSP, эквайеры
+- **enterprise**: крупные предприятия с технологическими сигналами (исключая IT-провайдеров, e-commerce, игровые компании, non-profit, военные)
+
 ## Этапы запуска
 
 ```bash
 # Stage 1: базовый сбор (baseline_summary, фильтры, is_relevant)
 python -m src.cli scrape --profile software --resume
+python -m src.cli scrape --profile iso_msp --resume
+python -m src.cli scrape --profile enterprise --resume
 
 # Stage 2: новости/статьи/LinkedIn (хайлайты, сигнал силы; вызываем по необходимости)
 python -m src.cli media --profile software --resume
@@ -76,6 +86,9 @@ streamlit run src/dashboard.py
 
 **ISO/MSP профиль**
 - `category`, `services`, `merchant_segments`, `partnerships`
+
+**Enterprise профиль**
+- `industry`, `exclusion_reason`, `tech_signals`
 
 **Stage 2 (сигналы)**
 - `news_highlight`, `article_highlight`, `linkedin_highlight`, `signal_confidence`
