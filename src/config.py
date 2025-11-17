@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     gsheet_worksheet: str = Field("Sheet1", alias="GSHEET_WORKSHEET")
     gsheet_worksheet_software: Optional[str] = Field(default=None, alias="GSHEET_WORKSHEET_SOFTWARE")
     gsheet_worksheet_iso_msp: Optional[str] = Field(default=None, alias="GSHEET_WORKSHEET_ISO_MSP")
+    gsheet_worksheet_enterprise: Optional[str] = Field(default=None, alias="GSHEET_WORKSHEET_ENTERPRISE")
 
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
     openai_model: str = Field("gpt-4o-mini", alias="OPENAI_MODEL")
@@ -88,6 +89,8 @@ class Settings(BaseSettings):
         candidates: List[Optional[str]] = []
         if profile == "iso_msp":
             candidates.extend([self.gsheet_worksheet_iso_msp, "ISO/MSP"])
+        elif profile == "enterprise":
+            candidates.extend([self.gsheet_worksheet_enterprise, "Enterprise"])
         else:
             candidates.extend([self.gsheet_worksheet_software, "Software"])
         candidates.append(self.gsheet_worksheet)

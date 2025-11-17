@@ -48,17 +48,21 @@ def load_companies(profile: str) -> List[Dict[str, Any]]:
         sheet = client.open_by_url(st.secrets["GSHEET_URL"])
         
         # Определяем имя worksheet
-        worksheet_name = st.secrets.get(
-            f"GSHEET_WORKSHEET_{profile.upper()}" if profile == "iso_msp" else "GSHEET_WORKSHEET_SOFTWARE",
-            "Software" if profile == "software" else "ISO/MSP"
-        )
+        if profile == "software":
+            worksheet_name = st.secrets.get("GSHEET_WORKSHEET_SOFTWARE", "Software")
+        elif profile == "iso_msp":
+            worksheet_name = st.secrets.get("GSHEET_WORKSHEET_ISO_MSP", "ISO/MSP")
+        elif profile == "enterprise":
+            worksheet_name = st.secrets.get("GSHEET_WORKSHEET_ENTERPRISE", "Enterprise")
+        else:
+            worksheet_name = "Sheet1"
         
         # Получаем worksheet
         try:
             worksheet = sheet.worksheet(worksheet_name)
         except gspread.exceptions.WorksheetNotFound:
             # Пробуем альтернативные имена
-            alt_names = ["Software", "ISO/MSP", "Sheet1"]
+            alt_names = ["Software", "ISO/MSP", "Enterprise", "Sheet1"]
             worksheet = None
             for name in alt_names:
                 try:
@@ -293,10 +297,17 @@ def main() -> None:
     
     # Sidebar filters
     st.sidebar.header("Filters")
+    
+    profile_options = {
+        "software": "Software",
+        "iso_msp": "ISO/MSP",
+        "enterprise": "Enterprise"
+    }
+    
     profile = st.sidebar.selectbox(
         "Profile",
-        ["software", "iso_msp"],
-        format_func=lambda x: "Software" if x == "software" else "ISO/MSP",
+        list(profile_options.keys()),
+        format_func=lambda x: profile_options[x],
     )
     
     # Load companies
