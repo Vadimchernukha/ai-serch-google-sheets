@@ -25,8 +25,10 @@
 
 5. Команды
    ```bash
-   # Stage 1: baseline_summary, фильтры, софт-проверка
+   # Stage 1: baseline_summary, фильтры, софт-проверка (выбери профиль: software, iso_msp, enterprise)
    python -m src.cli scrape --profile software --resume
+   python -m src.cli scrape --profile iso_msp --resume
+   python -m src.cli scrape --profile enterprise --resume
 
    # Stage 2: новости/статьи/LinkedIn (хайлайты без сырых массивов)
    python -m src.cli media --profile software --resume
